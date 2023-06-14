@@ -1,47 +1,27 @@
-#include <boost/bind.hpp>
 #include "adi_driver/serial_port.h"
 
 /**
  * @brief Constructor
  */
 SerialPort::SerialPort()
-	: port_io()
-	, port(port_io)
-	, wdg_timeout(0.1)
-	, wdg(port_io)
-	, status(PORT_STATUS::IDLE)
 {
 }
 
 /**
  * @brief Open device
- * @param device Device file name (e.g. /dev/ttyACM*)
+ * @param device Device file name (e.g. /dev/spidev0.0)
  * @retval 0 Success
  * @retval -1 Failure
  */
 int SerialPort::openPort(const std::string &device)
 {
-  if (isOpened())
-  {
-    std::fprintf(stderr, "[ADI SerialPort] Failed to open. Already opened.\r\n");
-    return -1;
-  }
+  fd = open(device.c_str(), O_RDWR);
 
-  boost::system::error_code ec;
-  ec.clear();
-  port.open(device, ec);
-  if (ec.value() != 0)
-  {
-    std::fprintf(stderr, "[ADI SerialPort] Failed to open. Error code : %d (%s)\r\n", ec.value(), ec.message().c_str());
-    return -1;
-  }
-  ec.clear();
-  port.set_option(boost::asio::serial_port_base::character_size(8), ec);
-  if (ec.value() != 0)
-  {
-    std::fprintf(stderr, "[ADI SerialPort] Failed to set options. Error code : %d\r\n", ec.value());
-    return -1;
-  }
+  uint32_t speed = 244000;
+  uint32_t mode = 3;
+
+  ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed); // speed = 0.244 MHz
+  ioctl(fd, SPI_IOC_WR_MODE32, &mode); // mode = 3 (required by datasheet)
 
   return 0;
 }
@@ -51,11 +31,7 @@ int SerialPort::openPort(const std::string &device)
  */
 void SerialPort::closePort()
 {
-  if (isOpened())
-  {
-    port.cancel();
-    port.close();
-  }
+  close(fd);
 }
 
 /**
@@ -63,7 +39,7 @@ void SerialPort::closePort()
  */
 bool SerialPort::isOpened() const
 {
-  return port.is_open();
+  return fd != -1; // hopefully -1 is unused in real fds
 }
 
 /**
@@ -71,62 +47,8 @@ bool SerialPort::isOpened() const
  */
 bool SerialPort::flushPort()
 {
-  port.cancel();
-  status = PORT_STATUS::IDLE;
-  return tcflush(port.lowest_layer().native_handle(), TCIOFLUSH) == 0 ? true : false;
-}
-
-/**
- *  @brief ASIO watchdog handler
- */
-void SerialPort::wdg_handler(const boost::system::error_code& ec)
-{
-  if (!ec)
-  {
-    switch (status)
-    {
-	  case PORT_STATUS::READ:
-        std::fprintf(stderr, "[ADI Serial Port] SPI read timeout\r\n");
-        break;
-
-      case PORT_STATUS::WRITE:
-        std::fprintf(stderr, "[ADI Serial Port] SPI write timeout\r\n");
-        break;
-
-	  default:
-        std::fprintf(stderr, "[ADI Serial Port] Unkown SPI state %d in timeout\r\n", status);
-        break;
-    }
-	status = PORT_STATUS::TIME_OUT;
-  }
-  else if (ec == boost::asio::error::operation_aborted)
-  {
-	  // Canceling the watchdog isn't a port error - it means
-	  // the read/write completed successfully
-	  return;
-  }
-  else
-  {
-    if (ec.value() != ECANCELED)
-    {
-      std::fprintf(stderr, "[ADI SerialPort] ??? wdg handle error. Code : %d\r\n", ec.value());
-    }
-	status = PORT_STATUS::SERIAL_ERROR;
-  }
-  port.cancel();
-}
-
-/**
- *  @brief ASIO serial port handler
- */
-void SerialPort::serial_handler(const boost::system::error_code& ec)
-{
-  if (ec)
-  {
-    std::fprintf(stderr, "[ADI SerialPort] serial error : %s\r\n", ec.message().c_str());
-	status = PORT_STATUS::SERIAL_ERROR;
-  }
-  wdg.cancel();
+  // do things...
+  return true;
 }
 
 /**
@@ -134,41 +56,10 @@ void SerialPort::serial_handler(const boost::system::error_code& ec)
  */
 bool SerialPort::write_bytes(const std::vector<uint8_t>& tx_bytes, const double timeout)
 {
-  if (status != SerialPort::PORT_STATUS::IDLE)
-  {
-    std::fprintf(stderr, "[ADI Serial Port] SPI write while status not IDLE\r\n");
-    return false;
-  }
-
-  //ROS_INFO_STREAM("write_bytes (" << tx_bytes.size() << ") : timeout = " << timeout);
-  port_io.reset();
-  status = SerialPort::PORT_STATUS::WRITE;
-  wdg.expires_from_now(boost::posix_time::millisec(static_cast<int>(timeout * 1000)));
-  wdg.async_wait(boost::bind(&SerialPort::wdg_handler, this, boost::asio::placeholders::error));
-  boost::asio::async_write(port, boost::asio::buffer(tx_bytes),
-		  boost::bind(&SerialPort::serial_handler, this, boost::asio::placeholders::error));
-
-  port_io.run();
-#if 0
-  fprintf(stderr, " ---> ");
-  for (const auto b : tx_bytes)
-	  fprintf(stderr, " %2.2x", static_cast<int>(b) & 0x000000FF);
-  fprintf(stderr, "\r\n");
-#endif
-
-  if (status == SerialPort::PORT_STATUS::TIME_OUT)
-  {
-    std::fprintf(stderr, "[ADI Serial Port] SPI write timeout\r\n");
-	status = SerialPort::PORT_STATUS::IDLE;
-    return false;
-  }
-  if (status == SerialPort::PORT_STATUS::SERIAL_ERROR)
-  {
-    std::fprintf(stderr, "[ADI Serial Port] SPI write error\r\n");
-	status = SerialPort::PORT_STATUS::IDLE;
-    return false;
-  }
-  status = SerialPort::PORT_STATUS::IDLE;
+  uint8_t *buffer = new uint8_t[tx_bytes.size()];
+  std::copy(tx_bytes.begin(), tx_bytes.end(), buffer);
+  write(fd, buffer, tx_bytes.size());
+  delete buffer;
   return true;
 }
 
@@ -177,41 +68,9 @@ bool SerialPort::write_bytes(const std::vector<uint8_t>& tx_bytes, const double 
  */
 bool SerialPort::read_bytes(std::vector<uint8_t>& rx_bytes, const double timeout)
 {
-  if (status != SerialPort::PORT_STATUS::IDLE)
-  {
-    std::fprintf(stderr, "[ADI SerialPort] SPI read while status not IDLE\r\n");
-    return false;
+  uint8_t rx_buffer[1];
+  while (read(fd, rx_buffer, 1) != 0) {
+    rx_bytes.push_back(rx_buffer[0]);
   }
-
-  //ROS_INFO_STREAM("read_bytes : timeout = " << timeout);
-  port_io.reset();
-  status = SerialPort::PORT_STATUS::READ;
-  wdg.expires_from_now(boost::posix_time::millisec(static_cast<int>(timeout * 1000)));
-  wdg.async_wait(boost::bind(&SerialPort::wdg_handler, this, boost::asio::placeholders::error));
-  boost::asio::async_read(port, boost::asio::buffer(rx_bytes),
-		  boost::bind(&SerialPort::serial_handler, this, boost::asio::placeholders::error));
-
-  port_io.run();
-#if 0
-  fprintf(stderr, " <--- ");
-  for (const auto b : rx_bytes)
-	  fprintf(stderr, " %2.2x", static_cast<int>(b) & 0x000000FF);
-  fprintf(stderr, "\r\n");
-#endif
-
-  if (status == SerialPort::PORT_STATUS::TIME_OUT)
-  {
-    std::fprintf(stderr, "[ADI Serial Port] SPI read timeout\r\n");
-	status = SerialPort::PORT_STATUS::IDLE;
-    return false;
-  }
-  if (status == SerialPort::PORT_STATUS::SERIAL_ERROR)
-  {
-    std::fprintf(stderr, "[ADI Serial Port] SPI read error\r\n");
-	status = SerialPort::PORT_STATUS::IDLE;
-    return false;
-  }
-  status = SerialPort::PORT_STATUS::IDLE;
   return true;
 }
-

@@ -1,9 +1,17 @@
 #ifndef ADI_SERIAL_PORT_H
 #define ADI_SERIAL_PORT_H
 
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <linux/types.h>
+#include <linux/spi/spidev.h>
 #include <string>
 #include <vector>
-#include <boost/asio.hpp>
 
 class SerialPort
 {
@@ -16,22 +24,7 @@ class SerialPort
 		bool write_bytes(const std::vector<uint8_t> &, const double timeout = 1.0);
 		bool read_bytes(std::vector<uint8_t> &, const double timeout = 1.0);
 	private:
-		boost::asio::io_service port_io;
-		boost::asio::serial_port port;
-		const double wdg_timeout;
-		boost::asio::deadline_timer wdg;
-		typedef enum
-		{
-			IDLE,
-			WRITE,
-			READ,
-			TRANSFER,
-			TIME_OUT,
-			SERIAL_ERROR
-		} PORT_STATUS;
-		PORT_STATUS status;
-		void wdg_handler(const boost::system::error_code &);
-		void serial_handler(const boost::system::error_code &);
+		int fd = -1;
 };
 
 #endif
