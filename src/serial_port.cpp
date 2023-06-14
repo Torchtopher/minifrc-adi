@@ -58,7 +58,9 @@ bool SerialPort::write_bytes(const std::vector<uint8_t>& tx_bytes, const double 
 {
   uint8_t *buffer = new uint8_t[tx_bytes.size()];
   std::copy(tx_bytes.begin(), tx_bytes.end(), buffer);
-  write(fd, buffer, tx_bytes.size());
+  // Throw away first byte since the driver expects that to go
+  // to the USB to SPI converter
+  write(fd, &buffer[1], tx_bytes.size() - 1);
   delete buffer;
   return true;
 }
@@ -69,6 +71,9 @@ bool SerialPort::write_bytes(const std::vector<uint8_t>& tx_bytes, const double 
 bool SerialPort::read_bytes(std::vector<uint8_t>& rx_bytes, const double timeout)
 {
   uint8_t rx_buffer[1];
+  // Add 0xFF first byte since the driver expects that to come
+  // from the USB to SPI converter
+  rx_bytes.push_back(0xFF);
   while (read(fd, rx_buffer, 1) != 0) {
     rx_bytes.push_back(rx_buffer[0]);
   }

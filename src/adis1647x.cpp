@@ -34,6 +34,7 @@
 #include <cstdio>                    // for fprintf, stderr, printf, perror
 #include <cstdint>                   // for uint8_t, int16_t, uint16_t, uint...
 #include <ostream>                   // for operator<<, stringstream, basic_...
+#include <sstream>
 #include <string>                    // for allocator, operator+, to_string
 #include <vector>                    // for vector
 #include "adi_driver/adis16470.h"    // for Adis16470
@@ -56,7 +57,7 @@ Adis16470::~Adis16470()
 
 /**
  * @brief Open device
- * @param device Device file name (/dev/ttyACM*)
+ * @param device Device file name (/dev/spidev0.0)
  * @retval 0 Success
  * @retval -1 Failure
  */
@@ -91,6 +92,7 @@ int Adis16470::open_port(const std::string &device)
   switch (prod_id)
   {
 	case 0x4056: // 16470
+  case 0x4256: // our 16470
 	case 0x575f: // 16470-a-like?
 	  accl_scale_factor = 1.25;
 	  k_g = 0.1;
@@ -499,23 +501,6 @@ bool Adis16470::read_register(const uint8_t address, int16_t& data)
 
 bool Adis16470::init_usb_iss()
 {
-  serial_port.flushPort();
-  const std::vector<uint8_t> init_packet = { 0x5A, 0x02, 0x93, 0x05 };
-  if (!serial_port.write_bytes(init_packet))
-  {
-    return false;
-  }
-
-  std::vector<uint8_t> ack(2);
-  if (!serial_port.read_bytes(ack))
-  {
-    return false;
-  }
-  //std::printf("Ack : %02X %02X\r\n", ack[0], ack[1]);
-  if (ack[0] != 0xFF || ack[1] != 0x00)
-  {
-    return false;
-  }
   return true;
 }
 
