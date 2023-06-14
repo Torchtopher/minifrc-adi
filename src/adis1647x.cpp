@@ -79,7 +79,7 @@ int Adis16470::open_port(const std::string &device)
 
   std::printf("[Adis1647x] Opened\r\n");
 
-    std::string prod_ver;
+  std::string prod_ver;
   int16_t prod_id;
   if (get_product_id(prod_id))
   {

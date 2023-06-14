@@ -38,7 +38,7 @@
 class ImuNode {
 public:
   Adis16470 imu;
-  std::string device_ = "/dev/ttyAMA0";
+  std::string device_ = "/dev/spidev0.0";
   bool burst_mode_ = false;
   bool publish_temperature_ = true;
   double rate_ = 100.0;
