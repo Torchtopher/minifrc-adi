@@ -1,5 +1,6 @@
 #include "adi_driver/serial_port.h"
-
+#include <ostream>
+#include <iostream>
 /**
  * @brief Constructor
  */
@@ -15,7 +16,7 @@ SerialPort::SerialPort()
  */
 int SerialPort::openPort(const std::string &device)
 {
-  fd = open(device.c_str(), O_RDWR);
+  fd = open(device.c_str(), O_RDWR | O_NONBLOCK);
 
   uint32_t speed = 244000;
   uint32_t mode = 3;
@@ -61,7 +62,9 @@ bool SerialPort::write_bytes(const std::vector<uint8_t>& tx_bytes, const double 
   // Throw away first byte since the driver expects that to go
   // to the USB to SPI converter
   write(fd, &buffer[1], tx_bytes.size() - 1);
+  //std::cout << "Wrote" << buffer << std::endl;
   delete buffer;
+//std::cout << "Wrote" << buffer << std::endl;
   return true;
 }
 
@@ -70,12 +73,22 @@ bool SerialPort::write_bytes(const std::vector<uint8_t>& tx_bytes, const double 
  */
 bool SerialPort::read_bytes(std::vector<uint8_t>& rx_bytes, const double timeout)
 {
+	read(fd, &rx_bytes[1], rx_bytes.size()-1);
+	rx_bytes[0] = 0xFF; /*
   uint8_t rx_buffer[1];
   // Add 0xFF first byte since the driver expects that to come
   // from the USB to SPI converter
-  rx_bytes.push_back(0xFF);
-  while (read(fd, rx_buffer, 1) != 0) {
-    rx_bytes.push_back(rx_buffer[0]);
-  }
+  rx_bytes[0]=0xFF;
+  //int count = 900;
+  //std::cout << "Read " << std::to_string(count) << " bytes" << std::endl;
+//  while (read(fd, rx_buffer, 1) > 0) {
+//count=	  read(fd, rx_buffer, 1);
+for (uint8_t i = 0; i < rx_bytes.size(); i++) {
+	read(fd, rx_buffer, 1);
+  rx_bytes[i+1]=rx_buffer[0];
+    std::cout << std::to_string(rx_buffer[0]);
+    //ioctl(fd, FIONREAD, &count);
+    //std::cout << std::to_string(count) << " bytes left" << std::endl;
+  }*/
   return true;
 }

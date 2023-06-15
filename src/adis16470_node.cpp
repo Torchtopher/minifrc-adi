@@ -65,6 +65,7 @@ public:
     // Wait 10ms for SPI ready
     usleep(10000);
     int16_t pid = 0;
+    std::cout <<"getting PID" << std::endl;
     imu.get_product_id(pid);
     //ROS_INFO("Product ID: %x\n", pid);
     std::cout << "Product ID: " << pid << std::endl;
@@ -116,6 +117,7 @@ public:
         }
       } else if (imu.update() == 0) {
         publish_imu_data();
+	std::cout << "successful update" << std::endl;
         //publish_temp_data();
       } else {
         //ROS_ERROR("Cannot update");

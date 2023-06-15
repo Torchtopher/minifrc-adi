@@ -82,6 +82,7 @@ int Adis16470::open_port(const std::string &device)
 
   std::string prod_ver;
   int16_t prod_id;
+  std::cout << "Getting product id" << std::endl;
   if (get_product_id(prod_id))
   {
     std::fprintf(stderr, "[Adis1647x] Init failed to read product ID.\r\n");
@@ -348,7 +349,7 @@ int Adis16470::update(void)
 
   // temperature convert
   temp = (double)temp_out * 0.1;
-
+  std::cout << "temp is " << temp << std::endl;
   // 32bit convert
   for (int i = 0; i < 3; i++)
   {
